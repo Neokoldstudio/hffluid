@@ -4,54 +4,69 @@ Shader "Custom/DisplacedSampleTex"
     {
         _MainTex ("Base (RGB)", 2D) = "white" {}
         _Displacement ("Displacement Strength", Range(0, 1)) = 0.1
+        _SurfaceColor ("Surface Color", Color) = (0.3, 0.5, 1, 1)
+        _SpecularColor ("Specular Color", Color) = (0.3, 0.5, 1, 1)
+        _Shininess ("Shininess", Range(1, 128)) = 64
     }
+
     SubShader
     {
-        Tags { "RenderType"="Opaque" }
+        Tags { "RenderPipeline" = "UniversalRenderPipeline" "RenderType" = "Opaque" }
         Pass
         {
-            CGPROGRAM
+            HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
 
-            #include "UnityCG.cginc"
+            // URP Includes
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
-            sampler2D _MainTex;
+            // Material properties
+            CBUFFER_START(UnityPerMaterial)
+                float _Displacement;
+                float4 _SurfaceColor;
+                float4 _SpecularColor;
+                float _Shininess;
+            CBUFFER_END
+
+            TEXTURE2D(_MainTex);
+            SAMPLER(sampler_MainTex);
+
             float4 _MainTex_ST;
-            float _Displacement;
 
-            struct appdata
+            struct Attributes
             {
-                float4 vertex : POSITION;
+                float4 positionOS : POSITION;
                 float2 uv : TEXCOORD0;
             };
 
-            struct v2f
+            struct Varyings
             {
-                float4 pos : SV_POSITION;
+                float4 positionHCS : SV_POSITION;
                 float2 uv : TEXCOORD0;
-                float3 normal : NORMAL;
+                float3 normalWS : TEXCOORD1;
+                float3 positionWS : TEXCOORD2;
             };
 
             float getHeight(float2 uv)
             {
-                float H = tex2Dlod(_MainTex, float4(uv, 0, 0)).r;
-                float h = tex2Dlod(_MainTex, float4(uv, 0, 0)).g;
+                float H = SAMPLE_TEXTURE2D_LOD(_MainTex, sampler_MainTex, uv, 0).r;
+                float h = SAMPLE_TEXTURE2D_LOD(_MainTex, sampler_MainTex, uv, 0).g;
                 return H + h;
             }
 
-            v2f vert(appdata v)
+            Varyings vert(Attributes IN)
             {
-                v2f o;
-                float2 uv = TRANSFORM_TEX(v.uv, _MainTex);
-                o.uv = uv;
+                Varyings OUT;
+                float2 uv = TRANSFORM_TEX(IN.uv, _MainTex);
+                OUT.uv = uv;
 
                 float height = getHeight(uv);
-                float3 displacedPos = v.vertex.xyz + float3(0, 1, 0) * height * _Displacement;
+                float3 displacedPosOS = IN.positionOS.xyz + float3(0, 1, 0) * height * _Displacement;
 
-                // Approximate normal from height map gradient
+                // Approximate normal
                 float eps = 0.01;
-
                 float heightX1 = getHeight(uv + float2(eps, 0));
                 float heightX2 = getHeight(uv - float2(eps, 0));
                 float heightY1 = getHeight(uv + float2(0, eps));
@@ -59,25 +74,43 @@ Shader "Custom/DisplacedSampleTex"
 
                 float3 dx = float3(2 * eps, (heightX1 - heightX2) * _Displacement, 0);
                 float3 dy = float3(0, (heightY1 - heightY2) * _Displacement, 2 * eps);
-                float3 normal = normalize(cross(dy, dx));
+                float3 normalOS = normalize(cross(dy, dx));
 
-                o.normal = normal;
-                o.pos = UnityObjectToClipPos(float4(displacedPos, 1.0));
-                return o;
+                OUT.normalWS = TransformObjectToWorldNormal(normalOS);
+                OUT.positionWS = TransformObjectToWorld(displacedPosOS);
+                OUT.positionHCS = TransformWorldToHClip(OUT.positionWS);
+                return OUT;
             }
 
-            half4 frag(v2f i) : SV_Target
+            half4 frag(Varyings IN) : SV_Target
             {
-                half4 texColor = tex2D(_MainTex, i.uv);
-                half4 color = half4(texColor.x,texColor.x,texColor.x,1.0);
+                float4 texColor = SAMPLE_TEXTURE2D(_MainTex, sampler_MainTex, IN.uv);
+                float4 color = float4(texColor.r, texColor.r, texColor.r, 1.0);
 
-                if(texColor.y >0.001)
+                if (texColor.g > 0.001)
                 {
-                   color = half4(i.normal * 0.5 + 0.5, 1.0);
+                    // Lighting
+                    Light mainLight = GetMainLight();
+
+                    float3 N = normalize(IN.normalWS);
+                    float3 L = normalize(mainLight.direction);
+                    float3 V = normalize(_WorldSpaceCameraPos - IN.positionWS);
+                    float3 H = normalize(L + V);
+
+                    float diff = saturate(dot(N, L));
+                    float3 diffuseColor = _SurfaceColor.rgb * diff; // bluish diffuse
+
+                    // Specular term
+                    float spec = pow(saturate(dot(N, H)), _Shininess);
+                    float3 specularColor = _SpecularColor.rgb * spec;
+
+                    color.rgb = (diffuseColor + specularColor) * mainLight.color;
                 }
+
                 return color;
             }
-            ENDCG
+
+            ENDHLSL
         }
     }
 }

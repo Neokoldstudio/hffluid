@@ -30,8 +30,10 @@ Material:
     m_Ints: []
     m_Floats:
     - _Displacement: 0.2
+    - _Shininess: 128
     - _SpecularPower: 128
     - _Tessellation: 8
     m_Colors:
     - _SpecularColor: {r: 1, g: 1, b: 1, a: 1}
+    - _SurfaceColor: {r: 0.16710171, g: 0.3359785, b: 0.7484276, a: 1}
   m_BuildTextureStacks: []

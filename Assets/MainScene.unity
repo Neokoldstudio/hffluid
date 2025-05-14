@@ -195,10 +195,10 @@ MonoBehaviour:
   tex1: {fileID: 0}
   tex2: {fileID: 0}
   material: {fileID: 2100000, guid: 6ec864237ddd94340a72c71fab38d45c, type: 2}
-  width: 256
-  height: 256
+  width: 512
+  height: 512
   deltaTime: 0.04
-  dx: 1.91
+  dx: 0.29
   epsilon: 0.0001
   gravity: 9.81
   alpha: 0.5
@@ -315,13 +315,13 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1188528372}
   serializedVersion: 2
-  m_LocalRotation: {x: 0.40821788, y: -0.23456968, z: 0.10938163, w: 0.8754261}
+  m_LocalRotation: {x: -0.9752519, y: 0.13020654, z: -0.084235884, w: -0.15758911}
   m_LocalPosition: {x: 0, y: 3, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 50, y: -30, z: 0}
+  m_LocalEulerAnglesHint: {x: 160.773, y: -7.501007, z: 13.936996}
 --- !u!1 &1247425547
 GameObject:
   m_ObjectHideFlags: 0

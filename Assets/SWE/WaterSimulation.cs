@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public class TextureCompute : MonoBehaviour
+public class WaterSimulation : MonoBehaviour
 {
     public ComputeShader computeShader;
     public Texture2D heightMap;
@@ -144,7 +144,7 @@ public class TextureCompute : MonoBehaviour
         computeShader.SetInt("texSizeX", width);
         computeShader.SetInt("texSizeY", height);
 
-        // Set buffers and textures for Init
+        // Set textures for Init
         computeShader.SetTexture(Init, "Tex1", tex1);
         computeShader.SetTexture(Init, "Tex2", tex2); // If reused
         computeShader.SetTexture(Init, "baseHeightMap", heightMap);
@@ -164,7 +164,7 @@ public class TextureCompute : MonoBehaviour
         computeShader.SetTexture(Boundary, "Tex1", tex1);
         computeShader.SetTexture(Boundary, "Tex2", tex2);
 
-        // Swap doesn't use buffers, just the render textures
+        // Set for Swap
         computeShader.SetTexture(Swap, "Tex1", tex1);
         computeShader.SetTexture(Swap, "Tex2", tex2);
 

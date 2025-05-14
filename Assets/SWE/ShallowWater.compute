@@ -242,7 +242,7 @@ void SwapKernel(uint3 id : SV_DispatchThreadID)
 [numthreads(8, 8, 1)]
 void InitKernel(uint3 id : SV_DispatchThreadID)
 {
-    float2 uvf = float2(id.xy) * (1024.0 / float2(texSizeX, texSizeY));
+    float2 uvf = float2(id.xy) * (500.0 / float2(texSizeX, texSizeY));
     int2 uv = id.xy;
 
     float H = baseHeightMap[uvf].r;
