@@ -4,7 +4,7 @@ This projects runs on the version 2022.3.46f1 of the Unity game engine and uses 
 
 To have a look at the code behind the simulation, find the compute shader under Assets/SWE/ShallowWater.compute
 
-The compute shader is executed by the script "WaterSimulation.cs" which can be found the the same folder as the compute shader.
+The compute shader is executed by the script "WaterSimulation.cs" which can be found in the same folder as the compute shader.
 
 controls of the simulation are the following : 
 - Space : start/stop the simulation
