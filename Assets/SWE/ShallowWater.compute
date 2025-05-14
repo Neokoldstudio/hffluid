@@ -1,0 +1,265 @@
+#define LEFT int2(1,0)
+#define RIGHT int2(-1,0)
+#define UP int2(0,-1)
+#define DOWN int2(0,1)
+
+
+#pragma kernel VelocityAdvection
+#pragma kernel HeightIntegration
+#pragma kernel VelocityIntegration
+#pragma kernel BoundaryKernel
+#pragma kernel SwapKernel
+#pragma kernel InitKernel
+
+Texture2D<float4> baseHeightMap; // The static terrain height map
+RWTexture2D<float4> Tex1; // Stores terrain height (R) and water depth (G)
+RWTexture2D<float4> Tex2; // Stores the next step
+
+float baseHeight;
+
+float texSizeX;
+float texSizeY;
+
+float deltaTime; // Time step (adjustable)
+float dx; // Grid spacing (adjustable)
+float g; // Gravity constant
+float epsilon;
+float alpha; // Smoothing factor
+float beta; // Smoothing factor
+
+// ===================
+//  Helpers
+// ===================
+int2 clampUV(int2 uv)
+{
+    uv.x = clamp(uv.x, 0, texSizeX);
+    uv.y = clamp(uv.y, 0, texSizeY);
+    return uv;
+}
+
+float getHeight(int2 uv)
+{
+    return Tex1[clampUV(uv)].r;
+}
+
+float getDepth(int2 uv)
+{
+    return Tex1[clampUV(uv)].g;
+}
+
+float getUVel(int2 uv)
+{
+    return Tex1[clampUV(uv)].b;
+}
+
+float getWVel(int2 uv)
+{
+    return Tex1[clampUV(uv)].a;
+}
+
+
+void ComputeCellVel(int2 uv, out float uR, out float uL, out float wU, out float wD)
+{
+    uR = getUVel(uv);
+    uL = getUVel(uv + LEFT);
+    wU = getWVel(uv);
+    wD = getWVel(uv + DOWN);
+}
+
+void ComputeUpwindHeights(int2 uv, out float hR, out float hL, out float hU, out float hD)
+{
+    float uR, uL, wU, wD;
+    ComputeCellVel(uv, uR, uL, wU, wD);
+
+    float hC = getDepth(uv);
+
+    hL = (uL > 0) ? getDepth(uv + LEFT) : hC;
+    hR = (uR > 0) ? hC : getDepth(uv + RIGHT);
+    hD = (wD > 0) ? getDepth(uv + DOWN) : hC;
+    hU = (wU > 0) ? hC : getDepth(uv + UP);
+    // Stability enhencement
+    /*
+    float avgmax = beta * (dx / (g * deltaTime));
+    float adj = max(0.0, (hL + hR + hD + hU) / 4 - avgmax);
+
+    hL -= adj;
+    hR -= adj;
+    hD -= adj;
+    hU -= adj;
+    */
+}
+
+// ===================
+//  Modified MacCormack Method with Semi-Lagrangian Fallback
+// ===================
+
+[numthreads(8, 8, 1)]
+void VelocityAdvection(uint3 id : SV_DispatchThreadID)
+{
+    int2 uv = id.xy;
+    float H = getHeight(uv);
+    float h = getDepth(uv);
+    float u = getUVel(uv);
+    float w = getWVel(uv);
+    
+    float2 prevPos = float2(uv) - deltaTime * float2(u, w)/dx;
+    
+    prevPos = clamp(prevPos, float2(0.0, 0.0), float2(texSizeX, texSizeY));
+
+    int2 iPos = int2(prevPos);
+    float2 f = frac(prevPos);
+
+    float u00 = getUVel(iPos);
+    float u10 = getUVel(iPos + int2(1, 0));
+    float u01 = getUVel(iPos + int2(0, 1));
+    float u11 = getUVel(iPos + int2(1, 1));
+    float uInterp = lerp(lerp(u00, u10, f.x), lerp(u01, u11, f.x), f.y);
+
+    float w00 = getWVel(iPos);
+    float w10 = getWVel(iPos + int2(1, 0));
+    float w01 = getWVel(iPos + int2(0, 1));
+    float w11 = getWVel(iPos + int2(1, 1));
+    float wInterp = lerp(lerp(w00, w10, f.x), lerp(w01, w11, f.x), f.y);
+
+    Tex2[uv] = float4(getHeight(uv), getDepth(uv), uInterp, wInterp);
+}
+
+// ===================
+//  Height Integration
+// ===================
+[numthreads(8, 8, 1)]
+void HeightIntegration(uint3 id : SV_DispatchThreadID)
+{
+
+    int2 uv = id.xy;
+
+    float H = getHeight(uv);
+    float h = getDepth(uv);
+    float2 vel = float2(getUVel(uv), getWVel(uv));
+    
+    float uR, uL, wU, wD;
+    ComputeCellVel(uv, uR, uL, wU, wD);
+
+    float hR, hL, hU, hD;
+    ComputeUpwindHeights(uv, hR, hL, hU, hD);
+
+    float fluxX = (hR * uR - hL * uL)/ dx;
+    float fluxY = (hU * wU - hD * wD)/ dx;
+    float dh = -(fluxX + fluxY);
+
+    float newh = max(0.0, h + (dh*deltaTime));
+    
+    Tex2[uv] = float4(H, newh, vel.x, vel.y);
+}
+
+// ===================
+//  Velocity Integration
+// ===================
+[numthreads(8, 8, 1)]
+void VelocityIntegration(uint3 id : SV_DispatchThreadID)
+{
+    int2 uv = id.xy;
+
+    float hC = getDepth(uv);
+    float H = getHeight(uv);
+    float eta = hC + H;
+
+    float etaR = getDepth(uv + RIGHT) + getHeight(uv + RIGHT);
+    float etaU = getDepth(uv + UP) + getHeight(uv + UP);
+
+    float2 vel = float2(getUVel(uv), getWVel(uv));
+
+    vel.x += (-g / dx * (etaR - eta)) * deltaTime;
+    vel.y += (-g / dx * (etaU - eta)) * deltaTime;
+    /*
+    float maxVel = alpha * (dx / deltaTime);
+    
+    vel.x = clamp(vel.x, -maxVel, maxVel);
+    vel.y = clamp(vel.y, -maxVel, maxVel);
+    */
+    Tex2[uv] = float4(H, hC, vel.x, vel.y);
+}
+
+[numthreads(8,8,1)]
+void BoundaryKernel(uint3 id : SV_DispatchThreadID)
+{
+    int2 uv = id.xy;
+    float U = getUVel(uv);
+    float W = getWVel(uv);
+    
+    float hC = getDepth(uv);
+    float H = getHeight(uv);
+    float etaC = hC + H;
+    
+    // Set reflective faces:
+    float hR = getDepth(uv + int2(1, 0));
+    float HR = getHeight(uv + int2(1, 0));
+    float etaR = hR + HR;
+    
+    float hU = getDepth(uv + int2(0, 1));
+    float HU = getHeight(uv + int2(0, 1));
+    float etaU = hU + HU;
+    
+    if ((hC <= epsilon && H > etaR) || (hR <= epsilon && HR > etaC))
+    {
+        U = 0;
+    }
+    if ((hC <= epsilon && H > etaU) || (hU <= epsilon && HU > etaC))
+    {
+        W = 0;
+    }
+    
+    if (uv.x == 0 || uv.x == texSizeX)
+    {
+        U = 0;
+
+    }
+    if (uv.y == 0 || uv.y == texSizeY)
+    {
+        W = 0;
+
+    }
+        
+    Tex2[uv] = float4(H, hC, U, W);
+}
+
+// =====================
+//  Swap Buffers
+// =====================
+[numthreads(8, 8, 1)]
+void SwapKernel(uint3 id : SV_DispatchThreadID)
+{
+    int2 uv = id.xy;
+    
+    Tex1[uv] = Tex2[uv];
+    Tex2[uv] = float4(0, 0, 0, 0);
+}
+
+
+// ===================
+//  Initialize Terrain + Water
+// ===================
+[numthreads(8, 8, 1)]
+void InitKernel(uint3 id : SV_DispatchThreadID)
+{
+    float2 uvf = float2(id.xy) * (1024.0 / float2(texSizeX, texSizeY));
+    int2 uv = id.xy;
+
+    float H = baseHeightMap[uvf].r;
+    float h = baseHeight;
+
+    Tex1[uv] = float4(H, h, 0.0,0.0);
+
+    if (length(float2(uv) - float2(texSizeX / 2, texSizeY / 2)) < 30.0)
+    {
+        float2 center = float2(texSizeX / 2, texSizeY / 2);
+        float dist = length(float2(uv) - center);
+        float sigma = 10.0;
+        float amplitude = 1.0;
+        float gaussian = amplitude * exp(-dist * dist / (2.0 * sigma * sigma));
+        Tex1[uv] += float4(0.0, gaussian, 0.0, 0.0);
+    }
+    
+    //init the swap buffers
+    Tex2[uv] = float4(0.0, 0.0, 0.0, 0.0);
+}
