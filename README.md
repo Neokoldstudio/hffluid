@@ -1,6 +1,6 @@
 # hffluid
 
-This projects runs on the version 2022.3.46f1 of the Unity game engine and uses compute shaders to handle the heavy computations behind the simulation.
+This projects runs on the version 2022.3.46f1 of the Unity game engine and uses compute shaders to handle the computations behind the simulation.
 
 To have a look at the code behind the simulation, find the compute shader under Assets/SWE/ShallowWater.compute
 
