@@ -4,7 +4,7 @@ public class WaterSimulation : MonoBehaviour
 {
     public ComputeShader computeShader;
     public Texture2D heightMap;
-    public RenderTexture tex1, tex2;
+    private RenderTexture tex1, tex2;
     public Material material;
 
     public int width = 1024;
@@ -104,7 +104,6 @@ public class WaterSimulation : MonoBehaviour
 
         computeShader.Dispatch(VelocityIntegration, width / 8, height / 8, 1);
         computeShader.Dispatch(Swap, width / 8, height / 8, 1);
-
     }
 
     RenderTexture CreateRenderTexture()
@@ -132,6 +131,9 @@ public class WaterSimulation : MonoBehaviour
         tex1 = CreateRenderTexture();
         tex2 = CreateRenderTexture();
 
+        float heightMapSize = Mathf.Min(heightMap.width, heightMap.height);
+
+        computeShader.SetFloat("baseHeightMapSize", heightMapSize);
         computeShader.SetFloat("baseHeight", baseHeight);
         computeShader.SetFloat("dx", dx);
         computeShader.SetFloat("deltaTime", deltaTime);
@@ -174,5 +176,31 @@ public class WaterSimulation : MonoBehaviour
 
         // Dispatch initialization
         computeShader.Dispatch(Init, width / 8, height / 8, 1);
+    }
+
+    private void computeVolume()
+    {
+        RenderTexture activeTex = tex1; // or tex2
+
+        // Read into Texture2D
+        RenderTexture prev = RenderTexture.active;
+        RenderTexture.active = activeTex;
+
+        Texture2D readTex = new Texture2D(width, height, TextureFormat.RGBAFloat, false);
+        readTex.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+        readTex.Apply();
+
+        RenderTexture.active = prev;
+
+        // Sum G channel
+        float areaSize = dx * dx;
+        float totalVolume = 0f;
+        Color[] pixels = readTex.GetPixels();
+        foreach (Color c in pixels)
+        {
+            totalVolume += c.g * areaSize;
+        }
+
+        Debug.Log("Total water volume: " + totalVolume);
     }
 }

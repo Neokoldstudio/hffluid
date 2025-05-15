@@ -16,6 +16,7 @@ RWTexture2D<float4> Tex1; // Stores terrain height (R) and water depth (G)
 RWTexture2D<float4> Tex2; // Stores the next step
 
 float baseHeight;
+float baseHeightMapSize;
 
 float texSizeX;
 float texSizeY;
@@ -78,7 +79,7 @@ void ComputeUpwindHeights(int2 uv, out float hR, out float hL, out float hU, out
     hD = (wD > 0) ? getDepth(uv + DOWN) : hC;
     hU = (wU > 0) ? hC : getDepth(uv + UP);
     // Stability enhencement
-    /*
+    
     float avgmax = beta * (dx / (g * deltaTime));
     float adj = max(0.0, (hL + hR + hD + hU) / 4 - avgmax);
 
@@ -86,7 +87,7 @@ void ComputeUpwindHeights(int2 uv, out float hR, out float hL, out float hU, out
     hR -= adj;
     hD -= adj;
     hU -= adj;
-    */
+    
 }
 
 // ===================
@@ -171,12 +172,12 @@ void VelocityIntegration(uint3 id : SV_DispatchThreadID)
 
     vel.x += (-g / dx * (etaR - eta)) * deltaTime;
     vel.y += (-g / dx * (etaU - eta)) * deltaTime;
-    /*
+    
     float maxVel = alpha * (dx / deltaTime);
     
     vel.x = clamp(vel.x, -maxVel, maxVel);
     vel.y = clamp(vel.y, -maxVel, maxVel);
-    */
+    
     Tex2[uv] = float4(H, hC, vel.x, vel.y);
 }
 
@@ -242,7 +243,7 @@ void SwapKernel(uint3 id : SV_DispatchThreadID)
 [numthreads(8, 8, 1)]
 void InitKernel(uint3 id : SV_DispatchThreadID)
 {
-    float2 uvf = float2(id.xy) * (500.0 / float2(texSizeX, texSizeY));
+    float2 uvf = float2(id.xy) * (baseHeightMapSize / float2(texSizeX, texSizeY));
     int2 uv = id.xy;
 
     float H = baseHeightMap[uvf].r;
