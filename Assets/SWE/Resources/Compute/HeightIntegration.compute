@@ -1,0 +1,26 @@
+#pragma kernel HeightIntegration
+#include "WaterCommon.hlsl"
+
+[numthreads(8, 8, 1)]
+void HeightIntegration(uint3 id : SV_DispatchThreadID)
+{
+    int2 uv = id.xy;
+
+    float H = getHeight(uv);
+    float h = getDepth(uv);
+    float2 vel = float2(getUVel(uv), getWVel(uv));
+
+    float uR, uL, wU, wD;
+    ComputeCellVel(uv, uR, uL, wU, wD);
+
+    float hR, hL, hU, hD;
+    ComputeUpwindHeights(uv, hR, hL, hU, hD);
+
+    float fluxX = (hR * uR - hL * uL) / dx;
+    float fluxY = (hU * wU - hD * wD) / dx;
+    float dh = -(fluxX + fluxY);
+
+    float newh = max(0.0, h + (dh * deltaTime));
+
+    Tex2[uv] = float4(H, newh, vel.x, vel.y);
+}

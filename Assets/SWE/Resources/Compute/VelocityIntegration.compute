@@ -1,0 +1,27 @@
+#pragma kernel VelocityIntegration
+#include "WaterCommon.hlsl"
+
+[numthreads(8, 8, 1)]
+void VelocityIntegration(uint3 id : SV_DispatchThreadID)
+{
+    int2 uv = id.xy;
+
+    float hC = getDepth(uv);
+    float H = getHeight(uv);
+    float eta = hC + H;
+
+    float etaR = getDepth(uv + RIGHT) + getHeight(uv + RIGHT);
+    float etaU = getDepth(uv + UP) + getHeight(uv + UP);
+
+    float2 vel = float2(getUVel(uv), getWVel(uv));
+
+    vel.x += (-g / dx * (etaR - eta)) * deltaTime;
+    vel.y += (-g / dx * (etaU - eta)) * deltaTime;
+
+    float maxVel = alpha * (dx / deltaTime);
+
+    vel.x = clamp(vel.x, -maxVel, maxVel);
+    vel.y = clamp(vel.y, -maxVel, maxVel);
+
+    Tex2[uv] = float4(H, hC, vel.x, vel.y);
+}

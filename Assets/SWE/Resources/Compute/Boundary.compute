@@ -1,0 +1,36 @@
+#pragma kernel BoundaryKernel
+#include "WaterCommon.hlsl"
+
+[numthreads(8, 8, 1)]
+void BoundaryKernel(uint3 id : SV_DispatchThreadID)
+{
+    int2 uv = id.xy;
+    float U = getUVel(uv);
+    float W = getWVel(uv);
+
+    float hC = getDepth(uv);
+    float H = getHeight(uv);
+    float etaC = hC + H;
+
+    float hR = getDepth(uv + int2(1, 0));
+    float HR = getHeight(uv + int2(1, 0));
+    float etaR = hR + HR;
+
+    float hU = getDepth(uv + int2(0, 1));
+    float HU = getHeight(uv + int2(0, 1));
+    float etaU = hU + HU;
+
+    if ((hC <= epsilon && H > etaR) || (hR <= epsilon && HR > etaC))
+        U = 0;
+
+    if ((hC <= epsilon && H > etaU) || (hU <= epsilon && HU > etaC))
+        W = 0;
+
+    if (uv.x == 0 || uv.x == texSizeX)
+        U = 0;
+
+    if (uv.y == 0 || uv.y == texSizeY)
+        W = 0;
+
+    Tex2[uv] = float4(H, hC, U, W);
+}

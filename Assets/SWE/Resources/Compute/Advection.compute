@@ -1,0 +1,31 @@
+#pragma kernel VelocityAdvection
+#include "WaterCommon.hlsl"
+
+[numthreads(8, 8, 1)]
+void VelocityAdvection(uint3 id : SV_DispatchThreadID)
+{
+    int2 uv = id.xy;
+    float u = getUVel(uv);
+    float w = getWVel(uv);
+
+    float2 prevPos = float2(uv) - deltaTime * float2(u, w) / dx;
+
+    prevPos = clamp(prevPos, float2(0.0, 0.0), float2(texSizeX, texSizeY));
+
+    int2 iPos = int2(prevPos);
+    float2 f = frac(prevPos);
+
+    float u00 = getUVel(iPos);
+    float u10 = getUVel(iPos + int2(1, 0));
+    float u01 = getUVel(iPos + int2(0, 1));
+    float u11 = getUVel(iPos + int2(1, 1));
+    float uInterp = lerp(lerp(u00, u10, f.x), lerp(u01, u11, f.x), f.y);
+
+    float w00 = getWVel(iPos);
+    float w10 = getWVel(iPos + int2(1, 0));
+    float w01 = getWVel(iPos + int2(0, 1));
+    float w11 = getWVel(iPos + int2(1, 1));
+    float wInterp = lerp(lerp(w00, w10, f.x), lerp(w01, w11, f.x), f.y);
+
+    Tex2[uv] = float4(getHeight(uv), getDepth(uv), uInterp, wInterp);
+}

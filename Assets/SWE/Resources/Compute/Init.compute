@@ -1,0 +1,26 @@
+#pragma kernel InitKernel
+#include "WaterCommon.hlsl"
+
+[numthreads(8, 8, 1)]
+void InitKernel(uint3 id : SV_DispatchThreadID)
+{
+    float2 uvf = float2(id.xy) * (baseHeightMapSize / float2(texSizeX, texSizeY));
+    int2 uv = id.xy;
+
+    float H = baseHeightMap[uvf].r;
+    float h = baseHeight;
+
+    Tex1[uv] = float4(H, h, 0.0, 0.0);
+
+    if (length(float2(uv) - float2(texSizeX / 2, texSizeY / 2)) < 30.0)
+    {
+        float2 center = float2(texSizeX / 2, texSizeY / 2);
+        float dist = length(float2(uv) - center);
+        float sigma = 10.0;
+        float amplitude = 1.0;
+        float gaussian = amplitude * exp(-dist * dist / (2.0 * sigma * sigma));
+        Tex1[uv] += float4(0.0, gaussian, 0.0, 0.0);
+    }
+
+    Tex2[uv] = float4(0.0, 0.0, 0.0, 0.0);
+}
